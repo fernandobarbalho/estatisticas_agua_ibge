@@ -3,6 +3,12 @@ library(tidyverse)
 
 ####Condições dos domicílios
 
+## Usar como referência para domicílios de um modo geral
+#https://sidra.ibge.gov.br/pesquisa/censo-demografico/demografico-2022/universo-caracteristicas-dos-domicilios
+
+## Usar como referência para domicílios em favelas
+#https://sidra.ibge.gov.br/pesquisa/censo-demografico/demografico-2022/universo-favelas-e-comunidades-urbanas
+
 estrutura_dados<- function(.data){
   .data<-
     .data%>%
