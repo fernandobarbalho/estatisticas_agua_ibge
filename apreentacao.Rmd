@@ -9,6 +9,13 @@ output: html_document
 knitr::opts_chunk$set(echo = FALSE, warning = FALSE, message = FALSE)
 
 library(tidyverse)
+library(patchwork)
+library(colorspace)
+library(cluster)
+library(sf)
+library(geobr)
+
+
 
 casa_trabalho <- readRDS("~/Github/estatisticas_agua_ibge/casa_trabalho.rds")
 
@@ -16,15 +23,104 @@ agua_trabalho <- readRDS("~/Github/estatisticas_agua_ibge/agua_trabalho.rds")
 servicos_sanitarios_basicos_trabalho <- readRDS("~/Github/estatisticas_agua_ibge/servicos_sanitarios_basicos_trabalho.rds")
 
 banheiro_trabalho <- readRDS("~/Github/estatisticas_agua_ibge/banheiro_trabalho.rds")
+
+municipios_sede <- geobr::read_municipal_seat()
+estados_sf <- geobr::read_state()
+
+
+africa_ocidental<- c("BEN", "BFA", "CPV", "CIV", "GMB", "GHA", "GIN", "GNB", "LBR", "MLI", "MRT", "NER",  "SEN", "SLE", "TGO")
+
+paises_sel <- c("BRA", "WLD", "ZAF", "NGA", "SSF")
 ```
 
-```{r}
+
+```{r fig.dpi= 300}
+titulo <-    "Proporção da população com acesso a serviços sanitários básicos"
+
+dados_grafico<-
+    servicos_sanitarios_basicos_trabalho %>%
+    mutate(obs_value = obs_value/100) %>%
+    select(ref_area_id, ref_area_name, obs_value, time_period) %>%
+    filter(ref_area_id %in% c(africa_ocidental, paises_sel),
+           time_period %in% c(2000,2022)) %>%
+    mutate(time_period = as.factor(time_period)) %>%
+    pivot_wider(names_from = time_period, values_from = obs_value) %>%
+    mutate(sinal= ifelse(`2000`>`2022`,-1,1)) %>%  
+    mutate(ref_area_name = reorder(ref_area_name,`2022`)) %>%
+    pivot_longer(cols = 3:4, names_to = "ano", values_to = "valor") %>%
+    arrange(ref_area_name)
+  
+  
+  dados_grafico_max<-
+    dados_grafico %>%
+    filter(ano == 2022)
+
+  dados_grafico_min<-
+    dados_grafico %>%
+    filter(ano == 2000)
+    
+  
+  areas_destaque<- c("WLD", "BRA", "NGA","SSF")
+
+  graf<-
+    dados_grafico %>%
+    ggplot(aes(y=ref_area_name, x= valor )) +
+    geom_line(aes(group= ref_area_id), color = "white") +
+    geom_point(aes(group = ref_area_id,color = ano ), size =2) +
+    geom_label(data = dados_grafico_max, 
+               aes(x= ifelse(sinal==1, valor +0.01, valor- 0.01 ) , 
+                   y= ref_area_name, 
+                   label= paste0(round(valor*100,0),"%"),  
+                   hjust = ifelse(sinal == 1,0,1),
+                   fill= ifelse(ref_area_id %in% areas_destaque,"1","0" )), 
+               alpha=1, 
+               color = "#00a396", 
+               #hjust=0, 
+               size = 2,
+               show.legend = FALSE) +
+    geom_label(data = dados_grafico_min, 
+               aes(x= ifelse(sinal==-1, valor +0.01, valor- 0.01 ) , 
+                   y= ref_area_name, 
+                   label= paste0(round(valor*100,0),"%"),  
+                   hjust = ifelse(sinal == -1,0,1),
+                   fill= ifelse(ref_area_id %in% areas_destaque,"1","0" )), 
+               alpha=1, 
+               color = "#c87a8a", 
+               #hjust=0, 
+               size = 2,
+               show.legend = FALSE)+
+    scale_x_continuous( labels = scales::percent, limits = c(-0.01,1)) +
+    scale_color_discrete_qualitative(palette = "Dark 2") +
+    scale_fill_manual(values = c("white","yellow")) +
+    theme_minimal() +
+    theme(
+      panel.background = element_rect(fill = "black"),
+      panel.grid = element_blank(),
+      panel.grid.major.x = element_line(color = "lightgray"),
+      legend.position= "bottom"
+    ) +
+    labs(
+      title = titulo,
+      #subtitle = subtitulo,
+      color = "",
+      x="",
+      y="",
+      caption = "Fonte: Banco Mundial. Elaboração: Fernando Barbalho"
+    ) 
+  
+  graf
+
+```
+
+
+```{r fig.dpi= 300}
 agua_trabalho %>%
   mutate(tipo_municipio = ifelse(str_detect( str_to_lower(municipio),"água"), 
                                  "Município com água no nome",
                                  "Município sem água no nome")) %>%
-  ggplot(aes(x=tipo_municipio, y= valor)) +
+  ggplot(aes(x=tipo_municipio, y= valor/100)) +
   geom_boxplot() +
+  scale_y_continuous( labels = scales::percent)+
   theme_light() +
   theme(
     panel.background = element_rect(fill = "lightblue"),
@@ -33,8 +129,8 @@ agua_trabalho %>%
     plot.subtitle = element_text(color = "darkblue", size =12, hjust = 0.5)
   ) +
   labs(title = "Abastecimento de água da rede geral de distribuição ",
-       subtitle =  "Proporção de residências por cidade",
-       y= "%",
+       subtitle =  "Proporção de residências por cidade. Elaboração: Fernando Barbalho",
+       y= "",
        x="",
        caption= "Fonte: Censo 2022 - IBGE")
 
@@ -42,38 +138,39 @@ agua_trabalho %>%
 
 
 
-```{r}
+```{r fig.dpi= 300}
 # Calcular o limite inferior do intervalo interquartil (IQR)
-lower_limit <- quantile(banheiro_trabalho$valor, 0.25) - 1.5 * IQR(banheiro_trabalho$valor)
+lower_limit <- (quantile(banheiro_trabalho$valor, 0.25) - 1.5 * IQR(banheiro_trabalho$valor))/100
 
 # Identificar pontos outliers inferiores
-outliers_inferiores <- banheiro_trabalho$valor < lower_limit
+outliers_inferiores <- banheiro_trabalho$valor/100 < lower_limit
 
 
 banheiro_trabalho %>%
   mutate(categoria = "Cidades brasileiras") %>%
-  ggplot(aes(x = categoria, y = valor)) +
+  ggplot(aes(x = categoria, y = valor/100)) +
   geom_jitter(pch=21,  fill="lightgray")+ 
-    geom_rect(aes(xmin = 0.5, xmax = 1.5, ymin = lower_limit - 0.1, ymax = min(banheiro_trabalho$valor[outliers_inferiores]) - 0.05), 
+geom_rect(aes(xmin = 0.5, xmax = 1.5, ymin = lower_limit - 0.1/100, ymax = min(banheiro_trabalho$valor[outliers_inferiores])/100 - 0.05/100), 
              fill = NA,
              color="white",
              alpha = 0.1) +
   geom_boxplot(color= "white", fill= NA, outlier.shape = NA) +
-  geom_text(aes(x = 1.1, y = 60, label = "Cidades precárias"), hjust = 0, vjust = -0.5, color= "white") + # Adicionando texto
-  ylim(c(0,100)) +
-  labs(title = "Proporção de domicílios com banheiro",
+  geom_label( data = tibble(x = 1.1, y = 0.60), aes(x = x, y = y, label = "Cidades precárias"), hjust = 0, vjust = -0.5, color= "black", alpha=0.9) + # Adicionando texto
+  scale_y_continuous( labels = scales::percent, limits = c(0,1))+
+  labs(title = "Proporção de domicílios com banheiro nas cidades brasileiras",
        x = "",
-       y = "%",
-       caption =  "Dados: IBGE - censo 2022. Elaboração própria") +
+       y = "",
+       caption =  "Dados: IBGE - censo 2022. Elaboração: Fernando Barbalho") +
   theme(plot.title = element_text(size = 12))+ # Definindo o tamanho da fonte do título
   theme(
     panel.background = element_rect(fill= "black"),
-    panel.grid =  element_blank()
+    panel.grid =  element_blank(),
+    plot.title = element_text(color = "darkblue", size =14, hjust = 0.5),
   )
 
 ```
 
-```{r}
+```{r fig.dpi= 300}
 numero_municipios_estados<-
   banheiro_trabalho%>%
   separate(municipio,into = c("municipio","uf"), sep = " - ") %>%
@@ -83,19 +180,125 @@ numero_municipios_estados<-
   
 
 
-# Exibir os pontos outliers inferiores
-banheiro_trabalho[outliers_inferiores, ] %>%
+dados_grafico<-
+  banheiro_trabalho[outliers_inferiores, ] %>%
   separate(municipio,into = c("municipio","uf"), sep = " - ") %>%
   summarise(quantidade_municpios_precarios = n(),
             .by= uf) %>%
   ungroup() %>%
   inner_join(numero_municipios_estados) %>%
   mutate(proporcao_municpios_precarios = (quantidade_municpios_precarios/ quantidade_municipios )*100) %>%
-  mutate(uf =  reorder(uf, proporcao_municpios_precarios)) %>%
+  mutate(uf =  reorder(uf, proporcao_municpios_precarios))
+  
+
+ dados_grafico %>%
   ggplot(aes(x= proporcao_municpios_precarios, y= uf)) +
   geom_col() +
-  geom_text(aes(label = paste0(round(proporcao_municpios_precarios, 1), "%"), x = proporcao_municpios_precarios + 1), 
+  geom_text(aes(label = paste0(round(proporcao_municpios_precarios, 1), "%"), x = proporcao_municpios_precarios + 0.2), 
             hjust = 0, color = "black", size = 3) +
-  theme_minimal()
+  theme_minimal() +
+  theme(
+        plot.title = element_text(color = "darkblue", size =14, hjust = 0.5),
+        axis.text.x = element_blank()
+  )+
+  labs(
+    title = "Ranking estados por proporção de municípios precários",
+    x= "",
+    y ="",
+    caption =  "Dados: IBGE - censo 2022. Elaboração: Fernando Barbalho"
+  )
+```
+
+```{r fig.dpi= 300}
+municipios_precarios<-
+  municipios_sede %>%
+  inner_join(
+     banheiro_trabalho[outliers_inferiores, ]  %>%
+      separate(municipio,into = c("municipio","uf"), sep = " - ") %>%
+      mutate(code_muni = as.numeric(codigo_ibge)) 
+  )
+
+ municipios_precarios %>%
+  ggplot() +
+  geom_sf(aes(fill= valor/100), pch= 21, size=1) +
+  geom_sf(data = estados_sf, fill=NA ) +
+  scale_fill_continuous_sequential(palette = "Heat",  labels = scales::label_percent(), rev= TRUE) +
+  theme_void() +
+  theme(
+    panel.background = element_rect(fill= "black"),
+    plot.title = element_text(color = "darkblue", size =14, hjust = 0.5),
+  ) +
+  labs(
+    title = "Municípios com baixas proporções de residências com banheiros",
+       caption =  "Dados: IBGE - censo 2022. Elaboração: Fernando Barbalho",
+    fill = "Proporção"
+  )
+
+```
+
+```{r fig.dpi= 300}
+df_cluster<-
+  agua_trabalho %>%
+  filter(!is.na(valor))
+
+#modelo_cluster<- cluster::pam(df_cluster$valor,k=3) #0.5613758
+modelo_cluster<- cluster::pam(df_cluster$valor,k=2) #0.58287
+#modelo_cluster<- cluster::pam(df_cluster$valor,k=4)
+
+
+df_cluster$cluster <- as.character(modelo_cluster$clustering)
+
+df_cluster %>%
+  mutate(categoria = "Cidades brasileiras") %>%
+  mutate(cluster = ifelse(cluster=="2","Cidades bem servidas","Cidades Precárias")) %>%
+  ggplot(aes(x = categoria, y = valor/100)) +
+  geom_jitter(pch=21,  aes(fill= cluster))+ 
+  geom_violin(fill=NA, color = "orange", size= 1) +
+  geom_boxplot(fill=NA, color = "yellow", size= 1, outlier.shape = NA) +
+  scale_fill_discrete_qualitative(palette= "Dark 2") +
+  scale_y_continuous( labels = scales::percent)+
+  labs(title = "Proporção de domicílios com água ligada à rede",
+       x = "",
+       y = "",
+       caption =  "Dados: IBGE - censo 2022. Elaboração própria") +
+  theme_light()+
+  theme(    plot.title = element_text(color = "darkblue", size =14, hjust = 0.5))+ # Definindo o tamanho da fonte do título
+  theme(
+    panel.background = element_rect(fill= "black"),
+    panel.grid =  element_blank()
+  )
+```
+
+```{r fig.dpi= 300}
+
+dados_mapa<-
+  municipios_sede %>%
+  inner_join(
+    df_cluster  %>%
+      mutate(cluster = ifelse(cluster=="2","Cidades bem servidas","Cidades precárias")) %>%
+      separate(municipio,into = c("municipio","uf"), sep = " - ") %>%
+      mutate(code_muni = as.numeric(codigo_ibge)) 
+  )
+
+dados_mapa %>%
+  ggplot() +
+  geom_sf(aes(fill= valor/100), pch= 21, size=0.5) +
+  geom_sf(data = estados_sf, fill=NA ) +
+  scale_fill_continuous_sequential(palette = "Heat 2",  labels = scales::label_percent()) +
+  theme_void() +
+  theme(
+    panel.background = element_rect(fill= "black")
+  ) +
+  facet_wrap(cluster~.) +
+  theme(
+        plot.title = element_text(color = "darkblue", size =14, hjust = 0.5),
+        plot.subtitle = element_text(color = "darkblue", size =12, hjust = 0.5),
+  ) +
+  labs(
+    title = "Municípios e acesso à rede geral de distribuição de água",
+    subtitle = "Proporção de residências com acesso",
+    fill = "Proporção",
+    caption =  "Dados: IBGE - censo 2022. Elaboração: Fernando Barbalho")
+   
 ```
 

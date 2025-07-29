@@ -16,6 +16,9 @@ saveRDS(servicos_sanitarios_basicos_trabalho, "servicos_sanitarios_basicos_traba
 
 ####Condições dos domicílios
 
+## Usar como referência cor e raça
+#https://sidra.ibge.gov.br/pesquisa/censo-demografico/demografico-2022/universo-populacao-por-cor-ou-raca
+
 ## Usar como referência para domicílios de um modo geral
 #https://sidra.ibge.gov.br/pesquisa/censo-demografico/demografico-2022/universo-caracteristicas-dos-domicilios
 
@@ -109,11 +112,11 @@ agua_trabalho<- estrutura_dados(domicilio_municipios_tipo_abastecimento_agua)
 saveRDS(agua_trabalho,"agua_trabalho.rds")
 
 
-domicilio_municipios_tipo_abastecimento_agua %>%
-  mutate(tipo_municipio = ifelse(str_detect( str_to_lower(D1N),"água"), 
+agua_trabalho %>%
+  mutate(tipo_municipio = ifelse(str_detect( str_to_lower(municipio),"água"), 
                                  "Município com água no nome",
                                  "Município sem água no nome")) %>%
-  ggplot(aes(x=tipo_municipio, y= V)) +
+  ggplot(aes(x=tipo_municipio, y= valor)) +
   geom_boxplot() +
   theme_light() +
   theme(
