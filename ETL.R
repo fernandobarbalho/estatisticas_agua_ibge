@@ -1,6 +1,19 @@
 library(sidrar)
 library(tidyverse)
 
+servicos_sanitarios_basicos <- #https://data360files.worldbank.org/data360-data/data/WB_WDI/WB_WDI_SH_STA_BASS_ZS.csv
+  read_csv("WB_WDI_SH_STA_BASS_ZS.csv") %>%
+  janitor::clean_names()
+
+servicos_sanitarios_basicos_trabalho<-
+  servicos_sanitarios_basicos %>%
+  select(ref_area_id,ref_area_name, unit_measure_name, time_period, obs_value )
+
+
+saveRDS(servicos_sanitarios_basicos_trabalho, "servicos_sanitarios_basicos_trabalho.rds")
+
+
+
 ####Condições dos domicílios
 
 ## Usar como referência para domicílios de um modo geral

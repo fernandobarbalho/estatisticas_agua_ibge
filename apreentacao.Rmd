@@ -1,0 +1,101 @@
+---
+title: "Apresentação"
+author: "Fernando Almeida Barbalho"
+date: '2025-07-29'
+output: html_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = FALSE, warning = FALSE, message = FALSE)
+
+library(tidyverse)
+
+casa_trabalho <- readRDS("~/Github/estatisticas_agua_ibge/casa_trabalho.rds")
+
+agua_trabalho <- readRDS("~/Github/estatisticas_agua_ibge/agua_trabalho.rds")
+servicos_sanitarios_basicos_trabalho <- readRDS("~/Github/estatisticas_agua_ibge/servicos_sanitarios_basicos_trabalho.rds")
+
+banheiro_trabalho <- readRDS("~/Github/estatisticas_agua_ibge/banheiro_trabalho.rds")
+```
+
+```{r}
+agua_trabalho %>%
+  mutate(tipo_municipio = ifelse(str_detect( str_to_lower(municipio),"água"), 
+                                 "Município com água no nome",
+                                 "Município sem água no nome")) %>%
+  ggplot(aes(x=tipo_municipio, y= valor)) +
+  geom_boxplot() +
+  theme_light() +
+  theme(
+    panel.background = element_rect(fill = "lightblue"),
+    panel.grid =  element_blank(),
+    plot.title = element_text(color = "darkblue", size =14, hjust = 0.5),
+    plot.subtitle = element_text(color = "darkblue", size =12, hjust = 0.5)
+  ) +
+  labs(title = "Abastecimento de água da rede geral de distribuição ",
+       subtitle =  "Proporção de residências por cidade",
+       y= "%",
+       x="",
+       caption= "Fonte: Censo 2022 - IBGE")
+
+```
+
+
+
+```{r}
+# Calcular o limite inferior do intervalo interquartil (IQR)
+lower_limit <- quantile(banheiro_trabalho$valor, 0.25) - 1.5 * IQR(banheiro_trabalho$valor)
+
+# Identificar pontos outliers inferiores
+outliers_inferiores <- banheiro_trabalho$valor < lower_limit
+
+
+banheiro_trabalho %>%
+  mutate(categoria = "Cidades brasileiras") %>%
+  ggplot(aes(x = categoria, y = valor)) +
+  geom_jitter(pch=21,  fill="lightgray")+ 
+    geom_rect(aes(xmin = 0.5, xmax = 1.5, ymin = lower_limit - 0.1, ymax = min(banheiro_trabalho$valor[outliers_inferiores]) - 0.05), 
+             fill = NA,
+             color="white",
+             alpha = 0.1) +
+  geom_boxplot(color= "white", fill= NA, outlier.shape = NA) +
+  geom_text(aes(x = 1.1, y = 60, label = "Cidades precárias"), hjust = 0, vjust = -0.5, color= "white") + # Adicionando texto
+  ylim(c(0,100)) +
+  labs(title = "Proporção de domicílios com banheiro",
+       x = "",
+       y = "%",
+       caption =  "Dados: IBGE - censo 2022. Elaboração própria") +
+  theme(plot.title = element_text(size = 12))+ # Definindo o tamanho da fonte do título
+  theme(
+    panel.background = element_rect(fill= "black"),
+    panel.grid =  element_blank()
+  )
+
+```
+
+```{r}
+numero_municipios_estados<-
+  banheiro_trabalho%>%
+  separate(municipio,into = c("municipio","uf"), sep = " - ") %>%
+  summarise(quantidade_municipios = n(),
+            .by= uf) %>%
+  ungroup()
+  
+
+
+# Exibir os pontos outliers inferiores
+banheiro_trabalho[outliers_inferiores, ] %>%
+  separate(municipio,into = c("municipio","uf"), sep = " - ") %>%
+  summarise(quantidade_municpios_precarios = n(),
+            .by= uf) %>%
+  ungroup() %>%
+  inner_join(numero_municipios_estados) %>%
+  mutate(proporcao_municpios_precarios = (quantidade_municpios_precarios/ quantidade_municipios )*100) %>%
+  mutate(uf =  reorder(uf, proporcao_municpios_precarios)) %>%
+  ggplot(aes(x= proporcao_municpios_precarios, y= uf)) +
+  geom_col() +
+  geom_text(aes(label = paste0(round(proporcao_municpios_precarios, 1), "%"), x = proporcao_municpios_precarios + 1), 
+            hjust = 0, color = "black", size = 3) +
+  theme_minimal()
+```
+
